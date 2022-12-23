@@ -28,7 +28,7 @@ app.use("/uploads/images", express.static(path.join("uploads", "images")));
 
 // package middleware
 app.use(bodyParser.json());
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(cors());
 app.use(xss());
 
