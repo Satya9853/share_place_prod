@@ -1,3 +1,4 @@
+const { cloudinaryUpload } = require("../util/cloudinary");
 const { StatusCodes } = require("http-status-codes");
 
 const UserModel = require("../model/users-schema");
@@ -19,8 +20,15 @@ exports.userSignup = async (req, res, next) => {
   if (!email) throw new BadRequestError("Please Provide the email");
   if (!password) throw new BadRequestError("Please Provide the password");
 
+  // uploading image to cloudinary
+  const result = await cloudinaryUpload((buffer = req.file.buffer), (image_type = "avatar"));
   // modifying the image file
-  req.body.image = req.file.path;
+  req.body.image = {
+    originalname: req.file.originalname,
+    url: result.secure_url,
+    public_id: result.public_id,
+    signature: result.signature,
+  };
   const user = await UserModel.create({ ...req.body });
 
   const token = await user.createJWT();

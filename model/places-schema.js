@@ -5,7 +5,12 @@ const placeSchema = new mongoose.Schema({
 
   description: { type: String, required: [true, "Please provide the description"], minlength: 5 },
 
-  image: { type: String, required: [true, "Please provide the Image"] },
+  image: {
+    originalname: { type: String, required: [true, "Please provide the original name"] },
+    url: { type: String, required: [true, "Please provide the Image"] },
+    public_id: { type: String, required: [true, "Please provide the public_id from cloudinary"] },
+    signature: { type: String, required: [true, "Please provide signature from cloudinary"] },
+  },
 
   address: { type: String, required: [true, "Please provide the address"] },
 

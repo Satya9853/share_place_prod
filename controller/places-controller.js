@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const { StatusCodes } = require("http-status-codes");
 const { validationResult } = require("express-validator");
-const fs = require("fs");
+const { cloudinaryUpload, cloudinaryDelete } = require("../util/cloudinary");
 
 const { BadRequestError, NotFoundError, CustomApiError } = require("../errors/index");
 const getCoordsForAddress = require("../util/location");
@@ -39,8 +39,18 @@ exports.createPlace = async (req, res, next) => {
 
   const userID = req.user._id;
 
+  // sending image sto cloudinary
+  const result = await cloudinaryUpload((buffer = req.file.buffer), (image_type = "places"));
+
+  if (!result) throw new Error();
+
   // updating images in body
-  req.body.image = req.file.path;
+  req.body.image = {
+    originalname: req.file.originalname,
+    url: result.secure_url,
+    public_id: result.public_id,
+    signature: result.signature,
+  };
 
   const user = await UserModel.findById(userID);
   if (!user) throw new NotFoundError("User Not Found ");
@@ -55,14 +65,19 @@ exports.createPlace = async (req, res, next) => {
     creator: userID,
   };
 
-  //  setting a transaction session which will roll back if any of the task fails
+  ///  setting a transaction session which will roll back if any of the task fails
   const transaction_session = await mongoose.startSession();
   transaction_session.startTransaction();
   const createdPlace = await PlaceModel.create([newPlace], { session: transaction_session });
   await user.updateOne({ $push: { places: createdPlace } }, { session: transaction_session });
-  transaction_session.commitTransaction();
+  transaction_session.commitTransaction(); /// here transaction ends
 
-  if (!createdPlace) throw new Error();
+  if (!createdPlace) {
+    // delete the image created in cloudinary
+    response = await cloudinaryDelete(result.public_id);
+    if (response instanceof Error) throw response;
+    throw new Error();
+  }
 
   res.status(StatusCodes.CREATED).json({ place: createdPlace });
 };
@@ -93,12 +108,10 @@ exports.deletePlaceByID = async (req, res, next) => {
   const transaction_session = await mongoose.startSession();
   transaction_session.startTransaction();
   const deletedPlace = await PlaceModel.findOneAndRemove({ _id: placeID, creator: userID }, { session: transaction_session }).populate("creator");
-  // deleting image from upload folder
-  const imagePath = deletedPlace.image;
-  fs.unlink(imagePath, (error) => {
-    console.log(error);
-  });
   if (!deletedPlace) throw new NotFoundError(`No place was found with placeID :${placeID}`);
+  // deleting image from upload folder
+  response = await cloudinaryDelete(deletedPlace.image.public_id);
+  if (response instanceof Error) throw response;
   await deletedPlace.creator.places.pull(deletedPlace);
   await deletedPlace.creator.save({ session: transaction_session });
   await transaction_session.commitTransaction();
